@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+/*
+ * Roofmate palette: gold yellow + red everywhere semantic colors are used.
+ * Components use Tailwind theme tokens (accent, border, muted, etc.).
+ */
+:root {
+  --background: #fffbeb;
+  --foreground: #450a0a;
+  --card: #fffef7;
+  --accent: #dc2626;
+  --accent-hover: #991b1b;
+  /* Same as preview banner fill — “Roof” in the logo uses this as text color */
+  --banner-yellow: #fde047;
+  --brand-yellow: #ca8a04;
+  --brand-yellow-bright: #eab308;
+  --brand-yellow-soft: #fef08a;
+  --muted: #92400e;
+  --border: #f87171;
+  --ring: #facc15;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-banner-yellow: var(--banner-yellow);
+  --color-brand-yellow: var(--brand-yellow);
+  --color-brand-yellow-bright: var(--brand-yellow-bright);
+  --color-brand-yellow-soft: var(--brand-yellow-soft);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Same hex as `--banner-yellow`; avoids Tailwind color pipeline + tames subpixel so it matches the bar */
+.brand-roof-text {
+  color: var(--banner-yellow);
+  -webkit-text-fill-color: var(--banner-yellow);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.roof-banner-fill {
+  background-color: var(--banner-yellow);
+}
+
+::selection {
+  background: #fecaca;
+  color: var(--foreground);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}

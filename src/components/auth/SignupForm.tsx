@@ -6,7 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
-export function SignupForm() {
+type Props = { nextPath?: string };
+
+export function SignupForm({ nextPath = "/quotes/new" }: Props) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,7 +34,7 @@ export function SignupForm() {
       return;
     }
     if (data.session) {
-      router.push("/dashboard");
+      router.push(nextPath);
       router.refresh();
       return;
     }

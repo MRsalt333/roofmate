@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isDemoMode } from "@/lib/demo";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUserOrNull } from "@/lib/supabase/server";
 import { calculatePricing } from "@/lib/pricing";
 import { PITCH_OPTIONS, ROOF_TYPES } from "@/lib/constants";
 
@@ -45,13 +45,14 @@ export async function saveQuoteAction(_prev: SaveQuoteState, formData: FormData)
     redirect("/quotes/demo");
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUserOrNull();
   if (!user) {
-    return { message: "You must be signed in." };
+    return {
+      message:
+        "Create an account to save this quote to your list. You can still download a PDF from the preview above.",
+    };
   }
+  const supabase = await createClient();
 
   const breakdown = calculatePricing({
     roofSizeSqm: roof_size,
@@ -82,5 +83,6 @@ export async function saveQuoteAction(_prev: SaveQuoteState, formData: FormData)
   }
 
   revalidatePath("/dashboard");
+  revalidatePath("/quotes/new");
   redirect(`/quotes/${data.id}`);
 }

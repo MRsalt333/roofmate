@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppSettingsMenu } from "@/components/AppSettingsMenu";
 import { BrandWordmark } from "@/components/BrandWordmark";
 import { Button } from "@/components/ui/Button";
 
@@ -15,13 +16,15 @@ export function AppHeader({ email, demo }: Props) {
           Preview mode — add Supabase keys and set NEXT_PUBLIC_DEMO_MODE=false to save real quotes
         </div>
       ) : null}
-      <div className="mx-auto flex max-w-lg items-center justify-between gap-3 px-4 py-3 sm:max-w-2xl">
-        <Link href="/dashboard" className="min-w-0 shrink py-1">
+      <div className="mx-auto flex max-w-lg items-center justify-between gap-3 px-4 py-4 sm:max-w-2xl">
+        <Link href="/quotes/new" className="min-w-0 shrink">
           <BrandWordmark size="header" />
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {email ? (
-            <span className="hidden max-w-[140px] truncate text-xs text-muted sm:inline">{email}</span>
+            <span className="hidden max-w-[120px] truncate text-xs text-muted sm:max-w-[140px] sm:inline">
+              {email}
+            </span>
           ) : null}
           {!demo ? (
             <form action="/auth/signout" method="post">
@@ -30,6 +33,7 @@ export function AppHeader({ email, demo }: Props) {
               </Button>
             </form>
           ) : null}
+          <AppSettingsMenu />
         </div>
       </div>
     </header>

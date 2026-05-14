@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { isDemoMode } from "@/lib/demo";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUserOrNull } from "@/lib/supabase/server";
 import { calculatePricing } from "@/lib/pricing";
 import { PITCH_OPTIONS, ROOF_TYPES } from "@/lib/constants";
 import { Card } from "@/components/ui/Card";
@@ -38,16 +38,17 @@ export default async function QuoteDetailPage({ params }: Props) {
     notFound();
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUserOrNull();
+  if (!user) {
+    redirect(`/login?next=${encodeURIComponent(`/quotes/${id}`)}`);
+  }
 
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("quotes")
     .select("*")
     .eq("id", id)
-    .eq("user_id", user!.id)
+    .eq("user_id", user.id)
     .maybeSingle();
 
   if (error || !data) {
@@ -71,11 +72,14 @@ function QuoteDetailContent({ quote }: { quote: QuoteRow }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="no-print flex items-center justify-between gap-3">
-        <Link href="/dashboard" className="text-sm font-semibold text-red-800 underline decoration-yellow-500 decoration-2 underline-offset-2 hover:text-red-950">
-          ← Dashboard
-        </Link>
         <Link href="/quotes/new" className="text-sm font-semibold text-red-800 underline decoration-yellow-500 decoration-2 underline-offset-2 hover:text-red-950">
-          New quote
+          ← New quote
+        </Link>
+        <Link
+          href="/dashboard"
+          className="text-sm font-semibold text-red-800 underline decoration-yellow-500 decoration-2 underline-offset-2 hover:text-red-950"
+        >
+          Saved quotes
         </Link>
       </div>
 

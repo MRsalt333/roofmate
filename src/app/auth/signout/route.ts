@@ -6,7 +6,11 @@ export async function POST() {
   if (isDemoMode()) {
     redirect("/dashboard");
   }
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  try {
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+  } catch {
+    /* still sign user out in the browser if remote signOut fails */
+  }
   redirect("/login");
 }

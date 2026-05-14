@@ -1,14 +1,18 @@
-import { createServerClient } from "@supabase/ssr";
+import type { User } from "@supabase/supabase-js";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isDemoMode } from "@/lib/demo";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/quotes"];
+function safeInternalPath(next: string | null): string | null {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return null;
+  return next;
+}
 
 export async function updateSession(request: NextRequest) {
   if (isDemoMode()) {
     const path = request.nextUrl.pathname;
-    if (path === "/" || path === "/login" || path === "/signup") {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+    if (path === "/") {
+      return NextResponse.redirect(new URL("/quotes/new", request.url));
     }
     return NextResponse.next();
   }
@@ -27,7 +31,7 @@ export async function updateSession(request: NextRequest) {
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
         supabaseResponse = NextResponse.next({ request });
         cookiesToSet.forEach(({ name, value, options }) =>
@@ -37,24 +41,19 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const path = request.nextUrl.pathname;
-  const isProtected = PROTECTED_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
-  const isAuthPage = path === "/login" || path === "/signup";
-
-  if (isProtected && !user) {
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/login";
-    redirectUrl.searchParams.set("next", path);
-    return NextResponse.redirect(redirectUrl);
+  let user: User | null = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user ?? null;
+  } catch {
+    /* Invalid URL, network, or JWKS errors — treat as signed out instead of 500 */
   }
+
+  const isAuthPage = request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/signup";
 
   if (isAuthPage && user) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/dashboard";
+    redirectUrl.pathname = safeInternalPath(redirectUrl.searchParams.get("next")) ?? "/quotes/new";
     redirectUrl.searchParams.delete("next");
     return NextResponse.redirect(redirectUrl);
   }

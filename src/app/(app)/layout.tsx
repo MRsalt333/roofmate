@@ -1,18 +1,15 @@
 import { isDemoMode } from "@/lib/demo";
-import { createClient } from "@/lib/supabase/server";
+import { getUserOrNull } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const demo = isDemoMode();
   let email: string | null | undefined;
   if (demo) {
-    email = "Demo preview";
+    email = null;
   } else {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    email = user?.email;
+    const user = await getUserOrNull();
+    email = user?.email ?? null;
   }
 
   return (

@@ -25,6 +25,9 @@ export type PricingBreakdown = {
   finalPrice: number;
 };
 
+/** Alias for template / account features (same shape as PricingBreakdown). */
+export type QuoteCalculationResult = PricingBreakdown;
+
 export function calculatePricing(input: PricingInputs): PricingBreakdown {
   const size = Math.max(0, input.roofSizeSqm);
   const mat = Math.max(0, input.materialCostPerSqm);

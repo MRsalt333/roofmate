@@ -5,9 +5,10 @@ export type SelectOption = { value: string; label: string };
 type Props = SelectHTMLAttributes<HTMLSelectElement> & {
   label: string;
   options: readonly SelectOption[];
+  hint?: string;
 };
 
-export function Select({ label, id, options, name, className = "", ...props }: Props) {
+export function Select({ label, hint, id, options, name, className = "", ...props }: Props) {
   const selectId = id ?? name;
   return (
     <label className="flex flex-col gap-1.5" htmlFor={selectId}>
@@ -24,6 +25,7 @@ export function Select({ label, id, options, name, className = "", ...props }: P
           </option>
         ))}
       </select>
+      {hint ? <span className="text-xs text-muted">{hint}</span> : null}
     </label>
   );
 }

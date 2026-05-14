@@ -1,32 +1,35 @@
 import type { HTMLAttributes } from "react";
-import { RoofIcon } from "@/components/RoofIcon";
+import Image from "next/image";
 
 type Props = HTMLAttributes<HTMLSpanElement> & {
   /** Header bar vs auth hero */
   size?: "header" | "hero";
 };
 
-const sizeClass = {
-  header: "text-3xl leading-none tracking-tight sm:text-4xl",
-  hero: "text-5xl leading-none tracking-tight sm:text-6xl",
+const imgClass = {
+  header:
+    "h-[72px] w-auto max-w-[min(100%,440px)] sm:h-20 sm:max-w-[520px]",
+  hero: "h-56 w-auto max-w-full sm:h-64 md:h-72",
 };
 
 /**
- * Small roof icon + “Roof” (exact banner yellow) + “mate” (red).
+ * Official roofmate logo (wordmark + tagline + icon).
  */
 export function BrandWordmark({ size = "header", className = "", ...props }: Props) {
-  const iconSize = size === "hero" ? "lg" : "md";
-
   return (
     <span
-      className={`inline-flex items-center gap-1.5 sm:gap-2 ${sizeClass[size]} ${className}`}
+      className={`inline-flex items-center justify-center ${imgClass[size]} ${className}`}
       {...props}
     >
-      <RoofIcon size={iconSize} className="translate-y-0.5" />
-      <span className="inline-block font-extrabold leading-none">
-        <span className="brand-roof-text">Roof</span>
-        <span className="text-[#dc2626]">mate</span>
-      </span>
+      <Image
+        src="/brand/roofmate-logo.png"
+        alt="roofmate — Aussies #1 roofing estimator"
+        width={1024}
+        height={227}
+        className={`h-full w-auto object-contain ${size === "header" ? "object-left" : "object-center"}`}
+        priority={size === "hero"}
+        sizes={size === "hero" ? "(max-width: 640px) 90vw, 800px" : "520px"}
+      />
     </span>
   );
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { isDemoMode } from "@/lib/demo";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUserOrNull } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import type { QuoteRow } from "@/types/database";
@@ -49,38 +49,56 @@ const DEMO_QUOTES: QuoteRow[] = [
 ];
 
 export default async function DashboardPage() {
-  let rows: QuoteRow[];
+  let rows: QuoteRow[] = [];
+  let guest = false;
 
   if (isDemoMode()) {
     rows = DEMO_QUOTES;
   } else {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    const { data: quotes } = await supabase
-      .from("quotes")
-      .select("*")
-      .eq("user_id", user!.id)
-      .order("created_at", { ascending: false });
-
-    rows = (quotes ?? []) as QuoteRow[];
+    const user = await getUserOrNull();
+    if (!user) {
+      guest = true;
+    } else {
+      const supabase = await createClient();
+      const { data: quotes } = await supabase
+        .from("quotes")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      rows = (quotes ?? []) as QuoteRow[];
+    }
   }
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-red-950">Your quotes</h1>
-          <p className="text-muted">Tap a job to view details or export PDF.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-red-950">Saved quotes</h1>
+          <p className="text-muted">
+            {guest ? "Sign in to keep quotes in one place. You can still build quotes without an account." : "Tap a job to view details or export PDF."}
+          </p>
         </div>
         <Link href="/quotes/new" className="no-print">
           <Button className="w-full sm:w-auto">New quote</Button>
         </Link>
       </div>
 
-      {rows.length === 0 ? (
+      {guest ? (
+        <Card className="text-center">
+          <p className="text-muted">No saved quotes while signed out.</p>
+          <p className="mt-2 text-sm text-muted">Create quotes anytime from New quote — no signup required.</p>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
+            <Link href="/quotes/new">
+              <Button>New quote</Button>
+            </Link>
+            <Link href="/account">
+              <Button type="button" variant="secondary">
+                Account (optional)
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      ) : rows.length === 0 ? (
         <Card className="text-center">
           <p className="text-muted">No saved quotes yet.</p>
           <Link href="/quotes/new" className="mt-4 inline-block">
@@ -97,9 +115,7 @@ export default async function DashboardPage() {
                     <div>
                       <p className="text-lg font-semibold">{q.customer_name}</p>
                       <p className="text-sm text-muted">{formatDate(q.created_at)}</p>
-                      {q.address ? (
-                        <p className="mt-1 line-clamp-2 text-sm text-muted">{q.address}</p>
-                      ) : null}
+                      {q.address ? <p className="mt-1 line-clamp-2 text-sm text-muted">{q.address}</p> : null}
                     </div>
                     <p className="shrink-0 text-lg font-bold text-accent">{formatMoney(q.final_price)}</p>
                   </div>

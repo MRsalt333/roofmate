@@ -37,3 +37,6 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# Generated one-shot SQL for Supabase dashboard (see npm run db:sql-bundle)
+supabase/BUNDLE_migrations_for_sql_editor.sql

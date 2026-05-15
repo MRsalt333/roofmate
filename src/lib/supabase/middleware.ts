@@ -2,6 +2,7 @@ import type { User } from "@supabase/supabase-js";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isDemoMode } from "@/lib/demo";
+import { getSupabaseUrlAndKey, isSupabaseConfigured } from "@/lib/supabase/env";
 
 function safeInternalPath(next: string | null): string | null {
   if (!next || !next.startsWith("/") || next.startsWith("//")) return null;
@@ -19,12 +20,11 @@ export async function updateSession(request: NextRequest) {
 
   let supabaseResponse = NextResponse.next({ request });
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !key) {
+  if (!isSupabaseConfigured()) {
     return supabaseResponse;
   }
+
+  const { url, key } = getSupabaseUrlAndKey();
 
   const supabase = createServerClient(url, key, {
     cookies: {

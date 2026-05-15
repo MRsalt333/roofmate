@@ -7,11 +7,17 @@
     "dev:turbo": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:link": "supabase link",
+    "db:push": "supabase db push",
+    "db:pull": "supabase db pull",
+    "db:diff": "supabase db diff",
+    "db:migration:list": "supabase migration list",
+    "db:sql-bundle": "bash scripts/bundle-supabase-migrations.sh"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
-    "@supabase/supabase-js": "^2.49.4",
+    "@supabase/supabase-js": "^2.105.4",
     "jspdf": "^2.5.2",
     "next": "^15.3.2",
     "react": "^19.1.0",
@@ -19,6 +25,7 @@
     "stripe": "^18.1.0"
   },
   "devDependencies": {
+    "supabase": "^2.98.2",
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^22",

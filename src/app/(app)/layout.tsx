@@ -2,6 +2,8 @@ import { isDemoMode } from "@/lib/demo";
 import { getUserOrNull } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 
+export const dynamic = "force-dynamic";
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const demo = isDemoMode();
   let email: string | null | undefined;

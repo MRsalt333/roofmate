@@ -6,7 +6,7 @@ import { LoginForm } from "@/components/auth/LoginForm";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { deleteQuoteTemplateFormAction, setDefaultTemplateFormAction } from "@/actions/templates";
+import { deleteQuoteTemplateFormAction, setDefaultTemplateAction } from "@/actions/templates";
 
 export default async function AccountPage() {
   const demo = isDemoMode();
@@ -116,15 +116,13 @@ export default async function AccountPage() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {!t.is_default ? (
-                      <form action={setDefaultTemplateFormAction}>
-                        <input type="hidden" name="id" value={t.id} />
+                      <form action={setDefaultTemplateAction.bind(null, t.id)}>
                         <Button type="submit" variant="secondary" className="min-h-10 px-3 text-sm">
                           Set default
                         </Button>
                       </form>
                     ) : null}
-                    <form action={deleteQuoteTemplateFormAction}>
-                      <input type="hidden" name="id" value={t.id} />
+                    <form action={deleteQuoteTemplateFormAction.bind(null, t.id)}>
                       <Button type="submit" variant="ghost" className="min-h-10 px-3 text-sm text-red-800">
                         Delete
                       </Button>

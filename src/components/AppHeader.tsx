@@ -17,7 +17,7 @@ export function AppHeader({ email, demo }: Props) {
         </div>
       ) : null}
       <div className="mx-auto flex max-w-lg items-center justify-between gap-3 px-4 py-4 sm:max-w-2xl">
-        <Link href="/quotes/new" className="min-w-0 shrink">
+        <Link href="/dashboard" className="min-w-0 shrink">
           <BrandWordmark size="header" />
         </Link>
         <div className="flex shrink-0 items-center gap-2">

@@ -4,13 +4,11 @@ Mobile-first roofing quote MVP for contractors: **Next.js (App Router)**, **Supa
 
 ## Quick look (no Supabase)
 
-1. Create `.env.local` with a single line:
-
-   `NEXT_PUBLIC_DEMO_MODE=true`
+1. Omit `NEXT_PUBLIC_SUPABASE_URL` and both public keys from `.env.local` (or leave only `NEXT_PUBLIC_DEMO_MODE=true`). The app runs in **preview mode** with sample quotes.
 
 2. Run `npm install` then `npm run dev` and open [http://localhost:3000](http://localhost:3000).
 
-You’ll land on the dashboard with sample quotes, can open **New quote**, use **Save quote** (redirects to a static sample detail), and try **Download PDF**. Turn off demo mode and add Supabase keys when you want real auth and saving.
+You’ll land on the dashboard with sample quotes, can open **New quote**, use **Save quote** (redirects to a static sample detail), and try **Download PDF**. When you add a real Supabase URL + anon or publishable key, preview mode turns off automatically and saves go to your project (no need to delete the demo line first).
 
 ## Prerequisites (full app)
 
@@ -19,14 +17,38 @@ You’ll land on the dashboard with sample quotes, can open **New quote**, use *
 
 ## 1. Supabase setup
 
-1. Create a new Supabase project.
-2. In the dashboard, open **SQL Editor** and paste the contents of `supabase/migrations/0001_init.sql`, then run it.  
-   If Postgres reports a syntax error on `execute function`, replace that clause with `execute procedure` (older instances) and run again.  
-   This creates:
-   - `public.profiles` — one row per auth user (triggered on signup; extends `auth.users` as your “users” table for app data).
-   - `public.quotes` — saved jobs/quotes with RLS so each user only sees their own rows.
-3. Under **Authentication → Providers**, ensure **Email** is enabled.
-4. For local development, under **Authentication → URL configuration**, set **Site URL** to `http://localhost:3000` and add the same to **Redirect URLs** if you use email confirmation links.
+### Option A — CLI (keeps the remote DB in sync with `supabase/migrations/`)
+
+1. Create a Supabase project if you do not have one yet.
+2. One-time login: `npx supabase login` (opens the browser).
+3. Link this repo to the project (get **Project ref** from the dashboard URL, and the **Database password** from **Project Settings → Database**):
+
+   ```bash
+   npm run db:link -- --project-ref YOUR_PROJECT_REF --password YOUR_DB_PASSWORD
+   ```
+
+4. Push all migrations to the hosted database (includes `quotes`, `quote_templates`, RLS, **table grants**, and **schema `public` usage** for the `authenticated` role):
+
+   ```bash
+   npm run db:push
+   ```
+
+   **No CLI link?** Run `npm run db:sql-bundle`, then paste **`supabase/BUNDLE_migrations_for_sql_editor.sql`** into the SQL Editor as one script (same order as `supabase/migrations/`).
+
+5. Under **Authentication → Providers**, ensure **Email** is enabled.
+6. Under **Authentication → URL configuration**, set **Site URL** to `http://localhost:3000` (and redirect URLs as needed).
+
+If `db push` errors on Postgres version, set `major_version` under `[db]` in `supabase/config.toml` to match **Project Settings → Database → Postgres version** (e.g. `15`).
+
+If you previously ran migration SQL only in the SQL Editor, the first `db push` still applies migration files in order; most statements are idempotent. If a step fails because an object already exists, fix the migration or use Supabase’s [migration repair](https://supabase.com/docs/reference/cli/supabase-migration-repair) to align history.
+
+### Option B — SQL Editor only
+
+1. Run `npm run db:sql-bundle`, open **`supabase/BUNDLE_migrations_for_sql_editor.sql`** in your editor, copy all, paste into **SQL Editor → New query → Run**.  
+   If Postgres reports a syntax error on `execute function`, replace that clause with `execute procedure` (older instances) in the bundle section for `0001_init.sql` and run again.
+2. Complete steps 5–6 from Option A for auth URLs.
+
+*(Alternatively, run each file under `supabase/migrations/` in sorted order by hand.)*
 
 ## 2. Environment variables
 
@@ -34,7 +56,7 @@ You’ll land on the dashboard with sample quotes, can open **New quote**, use *
 cp .env.example .env.local
 ```
 
-Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from **Project Settings → API**.
+Fill in `NEXT_PUBLIC_SUPABASE_URL` and either `NEXT_PUBLIC_SUPABASE_ANON_KEY` or `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from **Project Settings → API**.
 
 ## 3. Run locally
 
@@ -47,12 +69,18 @@ Open [http://localhost:3000](http://localhost:3000). Create an account on `/sign
 
 ## Scripts
 
-| Command       | Description           |
-| ------------- | --------------------- |
-| `npm run dev` | Next dev (Turbopack)  |
-| `npm run build` | Production build    |
-| `npm run start` | Start production server |
-| `npm run lint`  | ESLint                |
+| Command                 | Description                                      |
+| ----------------------- | ------------------------------------------------ |
+| `npm run dev`           | Next dev (Turbopack)                             |
+| `npm run build`         | Production build                                 |
+| `npm run start`         | Start production server                          |
+| `npm run lint`          | ESLint                                           |
+| `npm run db:link`       | Link repo to a Supabase project (`-- --help`)   |
+| `npm run db:push`       | Apply `supabase/migrations/` to the linked DB  |
+| `npm run db:pull`       | Pull remote schema changes into migration files  |
+| `npm run db:diff`       | Diff local vs remote (advanced)                  |
+| `npm run db:migration:list` | List migration status on the linked project  |
+| `npm run db:sql-bundle`     | Writes `supabase/BUNDLE_migrations_for_sql_editor.sql` to paste in the SQL Editor if `db:push` is not linked |
 
 ## Project layout
 
@@ -63,7 +91,7 @@ Open [http://localhost:3000](http://localhost:3000). Create an account on `/sign
 - `src/lib/supabase/` — browser + server Supabase clients and session middleware
 - `src/lib/pdf/quotePdf.ts` — client-side PDF via jsPDF
 - `src/lib/integrations/` — stubs for Google Maps roof measurement, Stripe checkout, subscriptions
-- `src/app/api/stripe/` — HTTP scaffolds returning `501` until Stripe is wired
+- `supabase/` — Supabase CLI config (`config.toml`) and versioned SQL migrations (`npm run db:link`, then `npm run db:push`)
 
 ## Pricing rules
 

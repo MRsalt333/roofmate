@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import Link from "next/link";
-import { saveQuoteAction, type SaveQuoteState } from "@/actions/quotes";
+import { saveQuoteFromJsonAction, type SaveQuoteState } from "@/actions/quotes";
 import { saveQuickTemplateFromQuoteAction, type TemplateActionState } from "@/actions/templates";
 import { calculatePricing } from "@/lib/pricing";
 import { applyTemplateToQuoteInputs } from "@/lib/templateApply";
@@ -17,8 +17,17 @@ import { DownloadPdfButton } from "@/components/quotes/DownloadPdfButton";
 import type { QuotePdfPayload } from "@/lib/pdf/quotePdf";
 import type { QuoteTemplateRow } from "@/types/quoteTemplate";
 
-const initialSaveState: SaveQuoteState = null;
 const initialTplState: TemplateActionState = null;
+
+function isNextRedirectError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "digest" in err &&
+    typeof (err as { digest: unknown }).digest === "string" &&
+    String((err as { digest: string }).digest).startsWith("NEXT_REDIRECT")
+  );
+}
 
 export type NewQuoteFormProps = {
   isDemo: boolean;
@@ -28,7 +37,9 @@ export type NewQuoteFormProps = {
 };
 
 export function NewQuoteForm({ isDemo, isLoggedIn, templates, defaultTemplate }: NewQuoteFormProps) {
-  const [state, formAction, pending] = useActionState(saveQuoteAction, initialSaveState);
+  const [quoteSaveState, setQuoteSaveState] = useState<SaveQuoteState>(null);
+  const [quoteSavePending, startQuoteSaveTransition] = useTransition();
+
   const [tplState, saveTplAction, tplPending] = useActionState(saveQuickTemplateFromQuoteAction, initialTplState);
 
   const [customerName, setCustomerName] = useState("");
@@ -113,6 +124,34 @@ export function NewQuoteForm({ isDemo, isLoggedIn, templates, defaultTemplate }:
         }
       : null;
 
+  function handleSaveQuoteSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setQuoteSaveState(null);
+    const payload = {
+      customer_name: customerName.trim(),
+      address: address.trim(),
+      roof_size: roofSize,
+      roof_type: roofType,
+      pitch,
+      material_cost: material,
+      labour_cost: labour,
+      margin,
+    };
+    startQuoteSaveTransition(() => {
+      void (async () => {
+        try {
+          const next = await saveQuoteFromJsonAction(JSON.stringify(payload));
+          if (next?.message) setQuoteSaveState(next);
+        } catch (err) {
+          if (isNextRedirectError(err)) return;
+          setQuoteSaveState({
+            message: err instanceof Error ? err.message : "Could not save quote.",
+          });
+        }
+      })();
+    });
+  }
+
   function onQuickSaveTemplate() {
     if (!isLoggedIn || isDemo) {
       setGuestTplHint(true);
@@ -138,7 +177,7 @@ export function NewQuoteForm({ isDemo, isLoggedIn, templates, defaultTemplate }:
         </Link>
       </div>
 
-      <form action={formAction} className="flex flex-col gap-6">
+      <form onSubmit={handleSaveQuoteSubmit} className="flex flex-col gap-6">
         <Card className="flex flex-col gap-4">
           <h1 className="text-2xl font-bold text-red-950">New quote</h1>
           {isLoggedIn && !isDemo && templates.length > 0 ? (
@@ -155,48 +194,42 @@ export function NewQuoteForm({ isDemo, isLoggedIn, templates, defaultTemplate }:
           ) : null}
 
           <Input
+            id="quote_customer_name"
             label="Customer name"
-            name="customer_name"
             required
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
           />
-          <Input label="Address" name="address" value={address} onChange={(e) => setAddress(e.target.value)} />
+          <Input id="quote_address" label="Address" value={address} onChange={(e) => setAddress(e.target.value)} />
           <Input
+            id="quote_roof_size"
             label="Roof size (m²)"
-            name="roof_size"
             inputMode="decimal"
             required
             value={roofSize}
             onChange={(e) => setRoofSize(e.target.value)}
           />
-          <Select
-            label="Roof type"
-            name="roof_type"
-            options={ROOF_TYPES}
-            value={roofType}
-            onChange={(e) => setRoofType(e.target.value)}
-          />
-          <Select label="Pitch" name="pitch" options={PITCH_OPTIONS} value={pitch} onChange={(e) => setPitch(e.target.value)} />
+          <Select label="Roof type" options={ROOF_TYPES} value={roofType} onChange={(e) => setRoofType(e.target.value)} />
+          <Select label="Pitch" options={PITCH_OPTIONS} value={pitch} onChange={(e) => setPitch(e.target.value)} />
           <Input
+            id="quote_material_cost"
             label="Material cost ($/m²)"
-            name="material_cost"
             inputMode="decimal"
             required
             value={material}
             onChange={(e) => setMaterial(e.target.value)}
           />
           <Input
+            id="quote_labour_cost"
             label="Labour cost ($/m²)"
-            name="labour_cost"
             inputMode="decimal"
             required
             value={labour}
             onChange={(e) => setLabour(e.target.value)}
           />
           <Input
+            id="quote_margin"
             label="Margin (%)"
-            name="margin"
             inputMode="decimal"
             required
             value={margin}
@@ -205,14 +238,14 @@ export function NewQuoteForm({ isDemo, isLoggedIn, templates, defaultTemplate }:
           />
         </Card>
 
-        {state?.message ? <p className="text-sm font-medium text-red-800">{state.message}</p> : null}
+        {quoteSaveState?.message ? <p className="text-sm font-medium text-red-800">{quoteSaveState.message}</p> : null}
 
         <Card id="quote-preview">
           <h2 className="mb-4 text-lg font-semibold text-red-950">Quote preview</h2>
           <QuoteBreakdown breakdown={breakdown} marginPercent={marginNum} />
           <div className="no-print mt-6 flex flex-col gap-3 sm:flex-row">
-            <Button type="submit" disabled={pending} className="flex-1">
-              {pending ? "Saving…" : isLoggedIn && !isDemo ? "Save quote" : "Save quote (sign in to keep)"}
+            <Button type="submit" disabled={quoteSavePending} className="flex-1">
+              {quoteSavePending ? "Saving…" : isLoggedIn && !isDemo ? "Save quote" : "Save quote (sign in to keep)"}
             </Button>
             {pdfPayload ? <DownloadPdfButton payload={pdfPayload} /> : null}
           </div>

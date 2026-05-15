@@ -1,0 +1,20 @@
+---
+description: Implement fixes, run tooling, and Roofmate Supabase persistence checklist
+alwaysApply: true
+---
+
+# Execution and backend work
+
+- **Implement first**: When fixing bugs, wiring Supabase (clients, RLS, migrations, grants), forms, server actions, or env/docs, make the code and config changes in the repo yourself. Do not only list steps for the user unless something truly cannot run here (e.g. browser-only `supabase login`, secrets you must not receive).
+- **Run commands**: Prefer running installs, lint, `tsc`, migrations, and CLI tasks in the project environment when permitted. If a command fails (sandbox, auth, network), try alternatives or report the exact error and the smallest unblocker.
+- **Safety**: Do not commit secrets. Do not paste production passwords into tracked files; use env vars and gitignored `.env.local`.
+
+# Roofmate — Supabase saves (do not regress)
+
+- **`isDemoMode()` vs `isSupabaseConfigured()`**: Preview mode must **only** apply when Supabase URL + public key are missing. If both are set, **never** treat the app as demo (including when `NEXT_PUBLIC_DEMO_MODE=true` remains in `.env`). If you edit `src/lib/demo.ts`, re-check `saveQuoteFromJsonAction` / `saveQuoteAction` (`src/actions/quotes.ts`) and template actions (`src/actions/templates.ts`) so they do not redirect or block saves while configured.
+- **Controlled forms + Server Actions**: Controlled fields (`value` + `onChange`) often **do not** populate `FormData` reliably for `useActionState` + native `<form action={...}>` (and `.bind` + `FormData` is brittle). **Do this instead**: (1) build `FormData` from React state in `onSubmit` and `dispatch` it to `useActionState`, or (2) pass a JSON string / plain object to a dedicated server action (see `saveQuoteFromJsonAction` + `NewQuoteForm`, and `createQuoteTemplateFromJsonAction` / `updateQuoteTemplateFromJsonAction`). Do not rely on hidden `<input name>` mirrors alone.
+- **Migrations workflow**:
+  1. Add or change SQL only under `supabase/migrations/` (timestamp prefix).
+  2. **Always run** `npm run db:push` when the repo is linked (`npm run db:link` after `npx supabase login`). If `db:push` fails with “Have you run supabase link?”, **immediately run** `npm run db:sql-bundle` and tell the user to paste `supabase/BUNDLE_migrations_for_sql_editor.sql` into the Supabase SQL Editor (do not end the task with “apply migrations” alone).
+  3. Keep README / `.env.example` aligned when env or demo semantics change.
+- **Permission / RLS errors on insert**: Confirm migrations `20260215140000_app_table_grants.sql` and `20260215160000_schema_usage_grants.sql` are applied; surface PostgREST details via `formatPostgrestError` (`src/lib/supabase/postgrestError.ts`).

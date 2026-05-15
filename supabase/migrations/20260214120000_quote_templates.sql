@@ -48,18 +48,25 @@ create unique index if not exists quote_templates_one_default_per_user
 
 alter table public.quote_templates enable row level security;
 
+drop policy if exists "quote_templates_select_own" on public.quote_templates;
 create policy "quote_templates_select_own"
   on public.quote_templates for select
   using (auth.uid() = user_id);
 
+drop policy if exists "quote_templates_insert_own" on public.quote_templates;
 create policy "quote_templates_insert_own"
   on public.quote_templates for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "quote_templates_update_own" on public.quote_templates;
 create policy "quote_templates_update_own"
   on public.quote_templates for update
   using (auth.uid() = user_id);
 
+drop policy if exists "quote_templates_delete_own" on public.quote_templates;
 create policy "quote_templates_delete_own"
   on public.quote_templates for delete
   using (auth.uid() = user_id);
+
+-- Refresh PostgREST schema cache so the table appears to the JS client immediately.
+notify pgrst, 'reload schema';

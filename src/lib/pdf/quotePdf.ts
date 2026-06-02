@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import type { DetailedQuoteBreakdown } from "@/types/quotePricing";
 import type { PricingBreakdown } from "@/lib/pricing";
 
 export type QuotePdfPayload = {
@@ -10,14 +11,18 @@ export type QuotePdfPayload = {
   materialPerSqm: number;
   labourPerSqm: number;
   marginPercent: number;
-  breakdown: PricingBreakdown;
-  /** Optional line shown at bottom (e.g. company name) */
+  breakdown: DetailedQuoteBreakdown | PricingBreakdown;
+  gstPercent?: number;
+  depositRequired?: number;
   footerNote?: string;
 };
 
+function isDetailed(b: DetailedQuoteBreakdown | PricingBreakdown): b is DetailedQuoteBreakdown {
+  return "profitMarginAmount" in b;
+}
+
 /**
  * Builds a minimal A4 PDF quote clientside (no server render).
- * Suitable for emailing or saving from the job site.
  */
 export function downloadQuotePdf(payload: QuotePdfPayload) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
@@ -45,13 +50,10 @@ export function downloadQuotePdf(payload: QuotePdfPayload) {
   y += 10;
 
   doc.setFontSize(10);
-  const lines: [string, string][] = [
-    ["Materials (total)", fmt(payload.breakdown.totalMaterialCost)],
-    ["Labour (total)", fmt(payload.breakdown.totalLabourCost)],
-    ["Subtotal", fmt(payload.breakdown.subtotal)],
-    [`Margin (${payload.marginPercent}%)`, fmt(payload.breakdown.marginAmount)],
-    ["Total (incl. margin)", fmt(payload.breakdown.finalPrice)],
-  ];
+  const lines: [string, string][] = isDetailed(payload.breakdown)
+    ? buildDetailedLines(payload)
+    : buildLegacyLines(payload);
+
   lines.forEach(([k, v], i) => {
     const isTotal = i === lines.length - 1;
     if (isTotal) {
@@ -78,6 +80,42 @@ export function downloadQuotePdf(payload: QuotePdfPayload) {
 
   const safeName = payload.customerName.replace(/[^\w\-]+/g, "_").slice(0, 40);
   doc.save(`roofmate-quote-${safeName}.pdf`);
+}
+
+function buildDetailedLines(payload: QuotePdfPayload): [string, string][] {
+  const b = payload.breakdown as DetailedQuoteBreakdown;
+  const lines: [string, string][] = [
+    ["Materials (base)", fmt(b.baseMaterialCost)],
+  ];
+  if (b.wasteAllowanceAmount > 0) lines.push(["Waste allowance", fmt(b.wasteAllowanceAmount)]);
+  if (b.fixingAllowanceAmount > 0) lines.push(["Fixing allowance", fmt(b.fixingAllowanceAmount)]);
+  lines.push(["Materials (total)", fmt(b.totalMaterialCost)]);
+  lines.push(["Labour", fmt(b.labourAfterMinimum)]);
+  for (const extra of b.optionalExtraLines) {
+    lines.push([extra.label, fmt(extra.amount)]);
+  }
+  if (b.travelFee > 0) lines.push(["Travel / call-out", fmt(b.travelFee)]);
+  if (b.steepPitchSurchargeAmount > 0) lines.push(["Steep pitch surcharge", fmt(b.steepPitchSurchargeAmount)]);
+  lines.push([`Profit margin (${payload.marginPercent}%)`, fmt(b.profitMarginAmount)]);
+  if (payload.gstPercent != null) {
+    lines.push([`GST (${payload.gstPercent}%)`, fmt(b.gstAmount)]);
+  }
+  lines.push(["Final total", fmt(b.finalPrice)]);
+  if (payload.depositRequired != null && payload.depositRequired > 0) {
+    lines.push(["Deposit required", fmt(payload.depositRequired)]);
+  }
+  return lines;
+}
+
+function buildLegacyLines(payload: QuotePdfPayload): [string, string][] {
+  const b = payload.breakdown as PricingBreakdown;
+  return [
+    ["Materials (total)", fmt(b.totalMaterialCost)],
+    ["Labour (total)", fmt(b.totalLabourCost)],
+    ["Subtotal", fmt(b.subtotal)],
+    [`Margin (${payload.marginPercent}%)`, fmt(b.marginAmount)],
+    ["Total", fmt(b.finalPrice)],
+  ];
 }
 
 function fmt(n: number) {

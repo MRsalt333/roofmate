@@ -4,18 +4,21 @@ import { useActionState, useEffect, useMemo, useRef, useState, useTransition, ty
 import Link from "next/link";
 import { saveQuoteFromJsonAction, type SaveQuoteState } from "@/actions/quotes";
 import { saveQuickTemplateFromQuoteAction, type TemplateActionState } from "@/actions/templates";
-import { calculatePricing } from "@/lib/pricing";
-import { applyTemplateToQuoteInputs } from "@/lib/templateApply";
+import { computeBreakdownForForm, defaultQuotePricingFields, pricingFromTemplate } from "@/lib/quoteFormState";
+import { materialPerSqmFromTemplate } from "@/lib/templateApply";
 import { DEFAULT_QUOTE_FORM, PITCH_OPTIONS, ROOF_TYPES } from "@/lib/constants";
 import type { PitchValue, RoofTypeValue } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
-import { QuoteBreakdown } from "@/components/quotes/QuoteBreakdown";
+import { QuoteDetailedBreakdown } from "@/components/quotes/QuoteBreakdown";
+import { QuoteAdvancedPricing } from "@/components/quotes/QuoteAdvancedPricing";
+import { QuoteOptionalExtras } from "@/components/quotes/QuoteOptionalExtras";
 import { DownloadPdfButton } from "@/components/quotes/DownloadPdfButton";
 import type { QuotePdfPayload } from "@/lib/pdf/quotePdf";
 import type { QuoteTemplateRow } from "@/types/quoteTemplate";
+import type { QuotePricingFields } from "@/types/quotePricing";
 
 const initialTplState: TemplateActionState = null;
 
@@ -29,6 +32,10 @@ function isNextRedirectError(err: unknown): boolean {
   );
 }
 
+function strField(n: number): string {
+  return Number.isFinite(n) ? String(n) : "";
+}
+
 export type NewQuoteFormProps = {
   isDemo: boolean;
   isLoggedIn: boolean;
@@ -39,7 +46,6 @@ export type NewQuoteFormProps = {
 export function NewQuoteForm({ isDemo, isLoggedIn, templates, defaultTemplate }: NewQuoteFormProps) {
   const [quoteSaveState, setQuoteSaveState] = useState<SaveQuoteState>(null);
   const [quoteSavePending, startQuoteSaveTransition] = useTransition();
-
   const [tplState, saveTplAction, tplPending] = useActionState(saveQuickTemplateFromQuoteAction, initialTplState);
 
   const [customerName, setCustomerName] = useState("");
@@ -47,67 +53,70 @@ export function NewQuoteForm({ isDemo, isLoggedIn, templates, defaultTemplate }:
   const [roofSize, setRoofSize] = useState("120");
   const [roofType, setRoofType] = useState<string>(ROOF_TYPES[0].value);
   const [pitch, setPitch] = useState<string>(PITCH_OPTIONS[0].value);
-  const [material, setMaterial] = useState(String(DEFAULT_QUOTE_FORM.materialCostPerSqm));
-  const [labour, setLabour] = useState(String(DEFAULT_QUOTE_FORM.labourCostPerSqm));
-  const [margin, setMargin] = useState(String(DEFAULT_QUOTE_FORM.marginPercent));
+  const [pricing, setPricing] = useState<QuotePricingFields>(() => defaultQuotePricingFields());
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [guestTplHint, setGuestTplHint] = useState(false);
   const [quickTplName, setQuickTplName] = useState("My pricing");
   const [makeDefaultTpl, setMakeDefaultTpl] = useState(false);
 
   const appliedDefaultOnce = useRef(false);
+  const skipTemplateApply = useRef(false);
+
+  const patchPricing = (patch: Partial<QuotePricingFields>) => {
+    setPricing((prev) => ({ ...prev, ...patch }));
+  };
+
+  const applyTemplate = (template: QuoteTemplateRow) => {
+    const size = Number(roofSize);
+    setPricing(
+      pricingFromTemplate(template, roofType as RoofTypeValue, Number.isFinite(size) && size > 0 ? size : 0)
+    );
+  };
 
   useEffect(() => {
     if (!defaultTemplate || appliedDefaultOnce.current || templates.length === 0) return;
     appliedDefaultOnce.current = true;
     setSelectedTemplateId(defaultTemplate.id);
-    const a = applyTemplateToQuoteInputs(defaultTemplate, roofType as RoofTypeValue, pitch as PitchValue);
-    setMaterial(String(a.material));
-    setLabour(String(a.labour));
-    setMargin(String(a.margin));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply default once when template list loads
+    applyTemplate(defaultTemplate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once on load
   }, [defaultTemplate?.id, templates.length]);
 
   useEffect(() => {
     if (!selectedTemplateId) return;
     const t = templates.find((x) => x.id === selectedTemplateId);
     if (!t) return;
-    const a = applyTemplateToQuoteInputs(t, roofType as RoofTypeValue, pitch as PitchValue);
-    setMaterial(String(a.material));
-    setLabour(String(a.labour));
-    setMargin(String(a.margin));
-  }, [selectedTemplateId, roofType, pitch, templates]);
+    if (skipTemplateApply.current) {
+      skipTemplateApply.current = false;
+      return;
+    }
+    applyTemplate(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- full apply when template id changes
+  }, [selectedTemplateId]);
+
+  useEffect(() => {
+    if (!selectedTemplateId) return;
+    const t = templates.find((x) => x.id === selectedTemplateId);
+    if (!t) return;
+    setPricing((prev) => ({
+      ...prev,
+      materialCostPerSqm: materialPerSqmFromTemplate(t, roofType as RoofTypeValue),
+    }));
+  }, [roofType, selectedTemplateId, templates]);
 
   const roofSizeNum = Number(roofSize);
-  const materialNum = Number(material);
-  const labourNum = Number(labour);
-  const marginNum = Number(margin);
+  const roofTypeValue = roofType as RoofTypeValue;
+  const pitchValue = pitch as PitchValue;
 
   const breakdown = useMemo(() => {
-    if (
-      !Number.isFinite(roofSizeNum) ||
-      roofSizeNum <= 0 ||
-      !Number.isFinite(materialNum) ||
-      !Number.isFinite(labourNum) ||
-      !Number.isFinite(marginNum)
-    ) {
-      return calculatePricing({
-        roofSizeSqm: 0,
-        materialCostPerSqm: 0,
-        labourCostPerSqm: 0,
-        marginPercent: 0,
-      });
+    if (!Number.isFinite(roofSizeNum) || roofSizeNum <= 0) {
+      return computeBreakdownForForm(pricing, 0, roofTypeValue, pitchValue);
     }
-    return calculatePricing({
-      roofSizeSqm: roofSizeNum,
-      materialCostPerSqm: materialNum,
-      labourCostPerSqm: labourNum,
-      marginPercent: marginNum,
-    });
-  }, [roofSizeNum, materialNum, labourNum, marginNum]);
+    return computeBreakdownForForm(pricing, roofSizeNum, roofTypeValue, pitchValue);
+  }, [pricing, roofSizeNum, roofTypeValue, pitchValue]);
 
   const roofTypeLabel = ROOF_TYPES.find((r) => r.value === roofType)?.label ?? roofType;
   const pitchLabel = PITCH_OPTIONS.find((p) => p.value === pitch)?.label ?? pitch;
+  const hasTemplate = Boolean(selectedTemplateId);
 
   const pdfPayload: QuotePdfPayload | null =
     customerName.trim().length > 0
@@ -117,30 +126,46 @@ export function NewQuoteForm({ isDemo, isLoggedIn, templates, defaultTemplate }:
           roofSizeSqm: roofSizeNum,
           roofTypeLabel,
           pitchLabel,
-          materialPerSqm: materialNum,
-          labourPerSqm: labourNum,
-          marginPercent: marginNum,
+          materialPerSqm: pricing.materialCostPerSqm,
+          labourPerSqm: pricing.labourCostPerSqm,
+          marginPercent: pricing.profitMarginPercent,
           breakdown,
+          gstPercent: pricing.gstPercent,
+          depositRequired: breakdown.depositRequired,
         }
       : null;
 
-  function handleSaveQuoteSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setQuoteSaveState(null);
-    const payload = {
+  function buildSaveJson(): string {
+    return JSON.stringify({
       customer_name: customerName.trim(),
       address: address.trim(),
       roof_size: roofSize,
       roof_type: roofType,
       pitch,
-      material_cost: material,
-      labour_cost: labour,
-      margin,
-    };
+      template_id: selectedTemplateId || null,
+      material_cost: pricing.materialCostPerSqm,
+      labour_cost: pricing.labourCostPerSqm,
+      margin: pricing.profitMarginPercent,
+      profit_margin_percent: pricing.profitMarginPercent,
+      gst_percent: pricing.gstPercent,
+      waste_allowance_percent: pricing.wasteAllowancePercent,
+      fixing_allowance_percent: pricing.fixingAllowancePercent,
+      travel_callout_fee: pricing.travelCalloutFee,
+      minimum_labour_charge: pricing.minimumLabourCharge,
+      minimum_quote_value: pricing.minimumQuoteValue,
+      deposit_percent: pricing.depositPercent,
+      steep_pitch_surcharge_percent: pricing.steepPitchSurchargePercent,
+      optional_extras: pricing.optionalExtras,
+    });
+  }
+
+  function handleSaveQuoteSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setQuoteSaveState(null);
     startQuoteSaveTransition(() => {
       void (async () => {
         try {
-          const next = await saveQuoteFromJsonAction(JSON.stringify(payload));
+          const next = await saveQuoteFromJsonAction(buildSaveJson());
           if (next?.message) setQuoteSaveState(next);
         } catch (err) {
           if (isNextRedirectError(err)) return;
@@ -159,9 +184,9 @@ export function NewQuoteForm({ isDemo, isLoggedIn, templates, defaultTemplate }:
     }
     const fd = new FormData();
     fd.set("template_name", quickTplName);
-    fd.set("material_cost", material);
-    fd.set("labour_cost", labour);
-    fd.set("margin", margin);
+    fd.set("material_cost", String(pricing.materialCostPerSqm));
+    fd.set("labour_cost", String(pricing.labourCostPerSqm));
+    fd.set("margin", String(pricing.profitMarginPercent));
     fd.set("make_default", makeDefaultTpl ? "true" : "false");
     saveTplAction(fd);
   }
@@ -185,11 +210,17 @@ export function NewQuoteForm({ isDemo, isLoggedIn, templates, defaultTemplate }:
               label="Pricing template (optional)"
               options={[
                 { value: "", label: "Manual pricing" },
-                ...templates.map((t) => ({ value: t.id, label: t.is_default ? `${t.template_name} (default)` : t.template_name })),
+                ...templates.map((t) => ({
+                  value: t.id,
+                  label: t.is_default ? `${t.template_name} (default)` : t.template_name,
+                })),
               ]}
               value={selectedTemplateId}
-              onChange={(e) => setSelectedTemplateId(e.target.value)}
-              hint="Prefills material, labour, and margin. You can still edit every field."
+              onChange={(e) => {
+                skipTemplateApply.current = false;
+                setSelectedTemplateId(e.target.value);
+              }}
+              hint="Prefills pricing from your template. Every value stays editable for this quote."
             />
           ) : null}
 
@@ -211,38 +242,62 @@ export function NewQuoteForm({ isDemo, isLoggedIn, templates, defaultTemplate }:
           />
           <Select label="Roof type" options={ROOF_TYPES} value={roofType} onChange={(e) => setRoofType(e.target.value)} />
           <Select label="Pitch" options={PITCH_OPTIONS} value={pitch} onChange={(e) => setPitch(e.target.value)} />
-          <Input
-            id="quote_material_cost"
-            label="Material cost ($/m²)"
-            inputMode="decimal"
-            required
-            value={material}
-            onChange={(e) => setMaterial(e.target.value)}
+
+          <div className="border-t border-red-100 pt-4">
+            <p className="mb-3 text-sm font-semibold text-red-950">Core pricing</p>
+            <div className="flex flex-col gap-3">
+              <Input
+                id="quote_material_cost"
+                label="Material cost ($/m²)"
+                inputMode="decimal"
+                required
+                value={strField(pricing.materialCostPerSqm)}
+                onChange={(e) => patchPricing({ materialCostPerSqm: Number(e.target.value) || 0 })}
+              />
+              <Input
+                id="quote_labour_cost"
+                label="Labour cost ($/m²)"
+                inputMode="decimal"
+                required
+                value={strField(pricing.labourCostPerSqm)}
+                onChange={(e) => patchPricing({ labourCostPerSqm: Number(e.target.value) || 0 })}
+              />
+              <Input
+                id="quote_profit_margin"
+                label="Profit margin (%)"
+                inputMode="decimal"
+                required
+                value={strField(pricing.profitMarginPercent)}
+                onChange={(e) => patchPricing({ profitMarginPercent: Number(e.target.value) || 0 })}
+                hint="Applied to subtotal before GST"
+              />
+            </div>
+          </div>
+
+          <QuoteAdvancedPricing
+            fields={pricing}
+            onChange={patchPricing}
+            showHelper={hasTemplate}
           />
-          <Input
-            id="quote_labour_cost"
-            label="Labour cost ($/m²)"
-            inputMode="decimal"
-            required
-            value={labour}
-            onChange={(e) => setLabour(e.target.value)}
-          />
-          <Input
-            id="quote_margin"
-            label="Margin (%)"
-            inputMode="decimal"
-            required
-            value={margin}
-            onChange={(e) => setMargin(e.target.value)}
-            hint="Applied to subtotal (materials + labour)"
+
+          <QuoteOptionalExtras
+            extras={pricing.optionalExtras}
+            onChange={(optionalExtras) => patchPricing({ optionalExtras })}
+            roofSizeSqm={roofSizeNum}
           />
         </Card>
 
         {quoteSaveState?.message ? <p className="text-sm font-medium text-red-800">{quoteSaveState.message}</p> : null}
 
         <Card id="quote-preview">
-          <h2 className="mb-4 text-lg font-semibold text-red-950">Quote preview</h2>
-          <QuoteBreakdown breakdown={breakdown} marginPercent={marginNum} />
+          <h2 className="mb-4 text-lg font-semibold text-red-950">Quote breakdown</h2>
+          <QuoteDetailedBreakdown
+            breakdown={breakdown}
+            profitMarginPercent={pricing.profitMarginPercent}
+            gstPercent={pricing.gstPercent}
+            depositPercent={pricing.depositPercent}
+            pitchIsSteep={pitch === "steep"}
+          />
           <div className="no-print mt-6 flex flex-col gap-3 sm:flex-row">
             <Button type="submit" disabled={quoteSavePending} className="flex-1">
               {quoteSavePending ? "Saving…" : isLoggedIn && !isDemo ? "Save quote" : "Save quote (sign in to keep)"}
@@ -259,7 +314,12 @@ export function NewQuoteForm({ isDemo, isLoggedIn, templates, defaultTemplate }:
             <p className="text-sm text-muted">Save these prices as a reusable template for your next job.</p>
             <Input label="Template name" value={quickTplName} onChange={(e) => setQuickTplName(e.target.value)} />
             <label className="flex items-center gap-2 text-sm font-medium text-red-950">
-              <input type="checkbox" checked={makeDefaultTpl} onChange={(e) => setMakeDefaultTpl(e.target.checked)} className="h-4 w-4" />
+              <input
+                type="checkbox"
+                checked={makeDefaultTpl}
+                onChange={(e) => setMakeDefaultTpl(e.target.checked)}
+                className="h-4 w-4"
+              />
               Make default template
             </label>
             {tplState?.message ? (
@@ -274,7 +334,10 @@ export function NewQuoteForm({ isDemo, isLoggedIn, templates, defaultTemplate }:
             <p className="text-sm text-muted">
               Create an account to save this template for next time. You can keep building quotes without signing up.
             </p>
-            <Link href="/account" className="text-sm font-semibold text-red-800 underline decoration-yellow-500 decoration-2 underline-offset-2">
+            <Link
+              href="/account"
+              className="text-sm font-semibold text-red-800 underline decoration-yellow-500 decoration-2 underline-offset-2"
+            >
               Open account
             </Link>
           </>
